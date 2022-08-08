@@ -29,6 +29,7 @@ impl UciOptionName {
             || *self == "UCI_AnalyseMode"
             || *self == "UCI_Opponent"
             || *self == "UCI_Chess960"
+            || *self == "UCI_Variant"
             || *self == "Analysis Contempt"
     }
 }

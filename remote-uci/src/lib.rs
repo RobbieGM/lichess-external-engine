@@ -4,6 +4,7 @@ mod ws;
 
 use std::{
     cmp::min,
+    collections::HashMap,
     error::Error,
     fs, io,
     net::{SocketAddr, TcpListener},
@@ -25,12 +26,12 @@ use listenfd::ListenFd;
 use serde::Serialize;
 use serde_with::{serde_as, CommaSeparator, DisplayFromStr, StringWithSeparator};
 use sysinfo::{RefreshKind, System, SystemExt};
+use uci::UciOptionName;
 
 use crate::{
     engine::Engine,
     ws::{Secret, SharedEngine},
 };
-
 
 /// External UCI engine provider for lichess.org.
 #[derive(Debug, Parser)]
@@ -50,6 +51,9 @@ pub struct Opts {
     /// Overwrite engine name.
     #[clap(long)]
     name: Option<String>,
+    /// NNUE eval file path.
+    #[clap(long)]
+    eval_file: Option<String>,
     /// Limit number of threads.
     #[clap(long)]
     max_threads: Option<u32>,
@@ -227,6 +231,10 @@ pub async fn make_server(
             err
         })?;
 
+    let mut options: HashMap<UciOptionName, String> = HashMap::new();
+    if let Some(eval_file) = opts.eval_file {
+        options.insert(UciOptionName("EvalFile".to_string()), eval_file);
+    }
     let engine = Engine::new(
         opts.engine.best(),
         EngineParameters {
@@ -242,18 +250,20 @@ pub async fn make_server(
                 u32::try_from(available_memory()).unwrap_or(u32::MAX),
             ),
         },
+        options,
     )
     .await
     .map_err(|err| {
         log::error!("Could not start engine: {err}");
         err
     })?;
-    
+
     let spec = ExternalWorkerOpts {
         url: format!(
-                 "{}://{}/socket",
-                 get_external_protocol(opts.publish_addr_tls),
-                 opts.publish_addr.unwrap_or(listener.local_addr().expect("local addr").to_string())
+            "{}://{}/socket",
+            get_external_protocol(opts.publish_addr_tls),
+            opts.publish_addr
+                .unwrap_or(listener.local_addr().expect("local addr").to_string())
         ),
         secret: secret.clone(),
         max_threads: engine.max_threads(),

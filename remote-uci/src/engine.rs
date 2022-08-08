@@ -27,7 +27,11 @@ pub struct EngineParameters {
 }
 
 impl Engine {
-    pub async fn new(path: PathBuf, params: EngineParameters) -> io::Result<Engine> {
+    pub async fn new(
+        path: PathBuf,
+        params: EngineParameters,
+        options: HashMap<UciOptionName, String>,
+    ) -> io::Result<Engine> {
         log::info!("Starting engine {path:?} ...");
 
         let mut process = Command::new(path)
@@ -54,6 +58,17 @@ impl Engine {
         let session = Session(0);
         engine.send(session, UciIn::Uci).await?;
         engine.ensure_idle(session).await?;
+        for (name, value) in options {
+            engine
+                .send_dangerous(
+                    session,
+                    UciIn::Setoption {
+                        name,
+                        value: Some(value),
+                    },
+                )
+                .await?;
+        }
         Ok(engine)
     }
 
